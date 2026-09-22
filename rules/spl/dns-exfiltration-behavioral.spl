@@ -1,0 +1,39 @@
+# Title: DNS Exfiltration via High-Entropy or Abnormally Long Subdomain Labels
+# MITRE ATT&CK: T1071.004 (Application Layer Protocol: DNS), T1048.003 (Exfiltration Over Alternative Protocol)
+# Status: experimental
+# Source: written to accompany rules/sigma/dns-exfiltration-behavioral.yml
+# Reference: https://www.splunk.com/en_us/blog/security/detecting-dns-data-exfiltration.html
+#
+# Behavioral companion to rules/spl/dns-exfiltration.spl. The original rule
+# matches a specific lab domain suffix ("exfil.lab") and is a proof-of-concept
+# IOC match. It will never fire against real traffic. This version computes
+# actual Shannon entropy per subdomain label in pure SPL (no dependency on
+# the URL Toolbox app), so it flags encoded/exfiltrated data by what it looks
+# like rather than by where it's going.
+#
+# Entropy threshold of 3.5 bits/char is a common starting point for
+# separating base32/base64/hex-encoded payloads from normal English-like
+# hostnames, but it WILL need tuning against this environment's own DNS
+# baseline. Cloud storage, CDNs, and DKIM/verification records also produce
+# long, high-entropy subdomains and should be allowlisted below.
+
+index=* sourcetype=syslog
+| rex field=_raw "info:\s+(?<client_ip>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+(?<query_domain>[A-Za-z0-9\-\.]+)"
+`comment("allowlist known-legitimate high-entropy domains before scoring, not after")`
+| search NOT query_domain IN ("*cloudfront.net", "*akamaiedge.net", "*amazonaws.com", "*windows.net", "*googleusercontent.com")
+| eval labels=split(query_domain, ".")
+| eval subdomain=mvindex(labels, 0)
+| eval subdomain_len=len(subdomain)
+| where subdomain_len >= 20
+`comment("give each row a stable key so per-character entropy can be re-aggregated back to the original event after mvexpand")`
+| eval event_id=_time . "_" . client_ip . "_" . query_domain
+| eval chars=split(subdomain, "")
+| mvexpand chars
+| stats count as char_count by event_id, chars, query_domain, client_ip, subdomain_len
+| eventstats sum(char_count) as total_chars by event_id
+| eval p=char_count/total_chars
+| eval plogp=p * log(p, 2) * -1
+| stats sum(plogp) as entropy, values(query_domain) as query_domain, values(client_ip) as client_ip, values(subdomain_len) as subdomain_len by event_id
+| where entropy >= 3.5
+| stats count, values(client_ip) as attacker_ip, values(subdomain_len) as subdomain_len, values(entropy) as entropy by query_domain
+| sort -entropy

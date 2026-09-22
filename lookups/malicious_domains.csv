@@ -1,0 +1,3 @@
+domain,first_seen,source
+placeholder-c2.test,2026-09-21,seed-placeholder (replaced by scripts/fetch_threat_intel.py)
+placeholder-phish.test,2026-09-21,seed-placeholder (replaced by scripts/fetch_threat_intel.py)

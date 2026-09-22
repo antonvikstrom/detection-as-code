@@ -1,0 +1,50 @@
+title: DNS Exfiltration via High-Entropy or Abnormally Long Subdomain Labels
+id: 2516eb10-af36-45af-a316-38933981e122
+status: experimental
+description: >
+  Behavioral/heuristic detection of DNS tunneling and exfiltration: flags DNS
+  queries whose leftmost subdomain label looks like encoded data, either a
+  long, high-character-diversity label (a proxy for high entropy, since core
+  Sigma has no entropy() function to call) or a long pure-hex label (common
+  for hash/hex-encoded exfil chunks), rather than matching any specific
+  domain. This is the generalizable companion to
+  rules/sigma/dns-exfiltration.yml, which is a lab-specific IOC match against
+  one known domain suffix and will not fire outside that lab. Before running
+  this against real traffic: tune the length thresholds against a baseline
+  of the environment's own DNS logs, and extend the CDN/cloud allowlist.
+  Legitimate services (content-addressed storage, DKIM/verification tokens)
+  also produce long, high-entropy-looking subdomains.
+references:
+  - https://github.com/antonvikstrom/automated-threat-detection-pipeline
+  - https://www.splunk.com/en_us/blog/security/detecting-dns-data-exfiltration.html
+author: Anton Vikstrom
+date: 2026-09-21
+mitre_attack:
+  - T1071.004
+  - T1048.003
+logsource:
+  category: dns_query
+  product: other
+detection:
+  selection_high_diversity_label:
+    query|re: '(^|\.)[A-Za-z0-9+/_=-]{40,63}\.'
+  selection_hex_label:
+    query|re: '(^|\.)[a-f0-9]{32,63}\.'
+  filter_common_cdn:
+    query|contains:
+      - 'cloudfront.net'
+      - 'akamaiedge.net'
+      - 'amazonaws.com'
+      - 'windows.net'
+      - 'googleusercontent.com'
+  condition: (selection_high_diversity_label or selection_hex_label) and not filter_common_cdn
+falsepositives:
+  - CDN and cloud storage subdomains with long hash-like identifiers not covered by the filter list
+  - DKIM/SPF/domain-verification TXT lookups using long random tokens
+  - Legitimate software using content-addressed subdomains (e.g. some package registries)
+level: medium
+tags:
+  - attack.exfiltration
+  - attack.command_and_control
+  - attack.t1071.004
+  - attack.t1048.003

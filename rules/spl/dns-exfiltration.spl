@@ -1,0 +1,26 @@
+# Title: DNS Exfiltration via Watchlisted Domain (Live Threat-Intel Lookup)
+# MITRE ATT&CK: T1071.004 (Application Layer Protocol: DNS), T1048.003 (Exfiltration Over Alternative Protocol)
+# Status: stable
+# Source: ported from automated-threat-detection-pipeline (Module 3); watchlist lookup added for this repo
+# Reference: https://github.com/antonvikstrom/automated-threat-detection-pipeline
+#
+# IOC match against a live threat-intel watchlist via Splunk's `lookup`
+# command, instead of a hardcoded domain suffix. Requires the
+# malicious_domains_splunk_lookup lookup definition (see
+# lookups/transforms.conf.example), pointed at
+# lookups/malicious_domains_splunk.csv, which scripts/fetch_threat_intel.py
+# refreshes on a schedule via .github/workflows/update-watchlist.yml. The
+# lookup's match_type = WILDCARD(domain) is what lets a "*.evil.com" entry
+# in the CSV match any subdomain of query_domain, not just an exact string.
+# This replaces the earlier version of this rule, which matched a single
+# hardcoded lab domain suffix ("exfil.lab") and was a proof-of-concept only.
+#
+# Like any IOC match, this still only catches domains already known to be
+# bad. See rules/spl/dns-exfiltration-behavioral.spl for a companion rule
+# that scores subdomains by structure (entropy/length) instead of by name.
+
+index=* sourcetype=syslog
+| rex field=_raw "info:\s+(?<client_ip>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+(?<query_domain>[A-Za-z0-9\=\.\-]+)"
+| lookup malicious_domains_splunk_lookup domain AS query_domain OUTPUT source, first_seen
+| where isnotnull(source)
+| stats count, values(client_ip) as attacker_ip, values(source) as intel_source, values(first_seen) as first_seen by query_domain

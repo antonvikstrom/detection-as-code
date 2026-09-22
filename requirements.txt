@@ -1,0 +1,4 @@
+pysigma>=0.11
+yara-python>=4.5
+pyyaml>=6.0
+requests>=2.31

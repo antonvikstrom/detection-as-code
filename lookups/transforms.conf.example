@@ -1,0 +1,22 @@
+# Example Splunk knowledge-object config for the threat-intel watchlist
+# lookup used by rules/spl/dns-exfiltration.spl.
+#
+# This is not auto-deployed by anything in this repo. It documents what a
+# Splunk admin would add to $SPLUNK_HOME/etc/apps/<app>/local/transforms.conf
+# (and the matching stanza in local/props.conf, if you want it referenced by
+# a search-time field extraction rather than an explicit `| lookup` call).
+#
+# The key setting is match_type = WILDCARD(domain): it tells Splunk to treat
+# the "*.domain" values in lookups/malicious_domains_splunk.csv as globs
+# rather than literal strings, so a lookup against query_domain matches any
+# subdomain of a watchlisted domain, not just an exact string.
+#
+# In production, lookups/malicious_domains_splunk.csv itself would usually
+# live wherever this transforms.conf points `filename` at, either synced
+# from this repo's CI-refreshed copy, or replaced with a scripted/modular
+# input inside Splunk that runs scripts/fetch_threat_intel.py directly on
+# the same schedule as .github/workflows/update-watchlist.yml.
+
+[malicious_domains_splunk_lookup]
+filename = malicious_domains_splunk.csv
+match_type = WILDCARD(domain)

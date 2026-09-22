@@ -1,0 +1,50 @@
+name: Lint detection rules
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-sigma:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip3 install -r requirements.txt
+      - name: Validate Sigma rules
+        run: python3 scripts/validate_sigma.py rules/sigma/
+      - name: Sanity-check threat-intel watchlist is non-empty
+        run: python3 scripts/build_watchlist_pipeline.py lookups/malicious_domains.csv
+
+  lint-yara:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip3 install -r requirements.txt
+      - name: Validate YARA rules
+        run: python3 scripts/validate_yara.py rules/yara/
+      - name: Test YARA rules fire on the right fixtures
+        run: python3 scripts/test_yara_rules.py
+
+  test-detections:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip3 install -r requirements.txt
+      - name: Test Sigma DNS rules fire on the right fixtures
+        run: python3 scripts/test_sigma_dns_logic.py
+      - name: Test SPL rule logic (LFI filter, entropy threshold) on the right fixtures
+        run: python3 scripts/test_spl_logic.py

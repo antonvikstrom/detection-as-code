@@ -1,0 +1,14 @@
+# Sample raw request lines (representing the Docker "log" field content that
+# rules/spl/lfi-path-traversal.spl parses) consumed by scripts/test_spl_logic.py.
+# Format: EXPECT<tab>raw_log_line
+# EXPECT is 1 if the rule's search filter ("*etc/passwd*" OR "*../*" OR "*%2e%2e%2f*")
+# should flag the line, 0 if not.
+1	203.0.113.5 - - [21/Sep/2026:10:00:00 +0000] "GET /vulnerabilities/fi/?page=../../../../etc/passwd HTTP/1.1" 200 1234
+1	203.0.113.5 - - [21/Sep/2026:10:00:05 +0000] "GET /vulnerabilities/fi/?page=%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd HTTP/1.1" 200 1234
+1	203.0.113.5 - - [21/Sep/2026:10:00:10 +0000] "GET /vulnerabilities/fi/?page=../../boot.ini HTTP/1.1" 200 1234
+0	198.51.100.9 - - [21/Sep/2026:10:01:00 +0000] "GET /vulnerabilities/fi/?page=include.php HTTP/1.1" 200 5678
+0	198.51.100.9 - - [21/Sep/2026:10:01:05 +0000] "GET /dashboard/ HTTP/1.1" 200 910
+# Known gap, not a benign case: mixed encoding ("..%2f" instead of "../" or
+# the fully-encoded "%2e%2e%2f") slips past all three OR clauses today.
+# Kept here deliberately so this test documents the gap instead of hiding it.
+0	203.0.113.5 - - [21/Sep/2026:10:00:15 +0000] "GET /vulnerabilities/fi/?page=..%2f..%2f..%2fetc%2fpasswd HTTP/1.1" 200 1234

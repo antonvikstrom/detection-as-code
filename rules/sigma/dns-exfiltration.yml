@@ -1,0 +1,46 @@
+title: DNS Exfiltration via Watchlisted Domain (Live Threat-Intel Lookup)
+id: e97fc2ea-8114-4637-914b-5ca94628226a
+status: stable
+description: >
+  IOC match against a live threat-intel watchlist rather than a hardcoded
+  domain. `query|endswith|expand: '%malicious_domains%'` uses Sigma's
+  placeholder mechanism. The `%malicious_domains%` value is resolved at
+  conversion time by the processing pipeline in
+  scripts/build_watchlist_pipeline.py, which loads the current contents of
+  lookups/malicious_domains.csv. That CSV is refreshed on a schedule by
+  .github/workflows/update-watchlist.yml (scripts/fetch_threat_intel.py,
+  pulling from abuse.ch URLhaus), so re-running a conversion against a fresh
+  checkout reflects the latest feed pull with no rule edit needed. This
+  replaces the earlier version of this rule, which matched a single
+  hardcoded lab domain suffix (`.exfil.lab`) and was a proof-of-concept only.
+  Like any IOC match, this still only catches domains already known to be
+  bad; for exfiltration over an unknown domain, see the behavioral companion
+  rule in rules/sigma/dns-exfiltration-behavioral.yml, which scores
+  subdomains by structure instead of by name. Platform-agnostic version of
+  the SPL rule in rules/spl/dns-exfiltration.spl: write once, convert to any
+  backend (Splunk, Sentinel/KQL, Elastic) via a Sigma converter, which is the
+  point of keeping this in Sigma rather than only in SPL.
+references:
+  - https://github.com/antonvikstrom/automated-threat-detection-pipeline
+  - https://urlhaus.abuse.ch/
+author: Anton Vikstrom
+date: 2026-09-21
+modified: 2026-09-21
+mitre_attack:
+  - T1071.004
+  - T1048.003
+logsource:
+  category: dns_query
+  product: other
+detection:
+  selection:
+    query|endswith|expand: '%malicious_domains%'
+  condition: selection
+falsepositives:
+  - Legitimate testing against a domain matching this suffix pattern outside the lab environment
+level: high
+tags:
+  - attack.exfiltration
+  - attack.command_and_control
+  - attack.t1071.004
+  - attack.t1048.003

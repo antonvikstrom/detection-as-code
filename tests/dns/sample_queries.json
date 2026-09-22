@@ -1,0 +1,25 @@
+{
+  "_note": "Sample DNS query strings the IOC-match and behavioral Sigma rules should and shouldn't fire on. Consumed by scripts/test_sigma_dns_logic.py, which reads the live regex/watchlist values out of the rule files rather than duplicating them here, so these fixtures test the actual current rule content.",
+
+  "watchlist_ioc": [
+    {"query": "beacon.placeholder-c2.test", "expect_match": true, "note": "subdomain of a watchlisted domain"},
+    {"query": "www.google.com", "expect_match": false, "note": "benign, not on the watchlist"},
+    {"query": "notplaceholder-c2.test", "expect_match": false, "note": "substring collision guard: must NOT match on a bare suffix without the domain boundary"},
+    {"query": "placeholder-phish.test", "expect_match": false, "note": "documented limitation: bare apex query with no subdomain label is not matched by design"}
+  ],
+
+  "behavioral_heuristic": [
+    {"query": "aG9zdG5hbWU1MjM0NTY3ODkwYWJjZGVmZ2hpamsxxxxx.tunnel.example.com", "expect_match": true, "note": "long high-diversity base64-like label"},
+    {"query": "deadbeefcafebabe0123456789abcdef01ffeeddccbbaa9988.tunnel.example.com", "expect_match": true, "note": "long hex label"},
+    {"query": "www.google.com", "expect_match": false, "note": "ordinary short hostname"},
+    {"query": "mail.corp.local", "expect_match": false, "note": "ordinary short hostname"},
+    {"query": "e3x9j2k8m1p7q4r6s0t5u9v2w8y1z4a7b3c6d0f2g5h8j1k4l7m0n3p6q9r2s5t8x9y1z2.cloudfront.net", "expect_match": false, "note": "long high-entropy-looking label that WOULD match if not for the CDN allowlist filter"}
+  ],
+
+  "entropy_heuristic": [
+    {"subdomain": "aG9zdG5hbWU1MjM0NTY3ODkwYWJjZGVmZw", "expect_high_entropy": true, "note": "base64-like encoded chunk"},
+    {"subdomain": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8", "expect_high_entropy": true, "note": "hex-like encoded chunk"},
+    {"subdomain": "www", "expect_high_entropy": false, "note": "ordinary short label"},
+    {"subdomain": "mail", "expect_high_entropy": false, "note": "ordinary short label"}
+  ]
+}
