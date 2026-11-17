@@ -1,13 +1,19 @@
 #!/usr/bin/env python3
 """
-Pulls recent malicious URLs from abuse.ch URLhaus (free, no API key
-needed), extracts the hostnames, and writes them to this repo's
-threat-intel watchlist in two forms:
+Pulls recent malicious URLs from abuse.ch URLhaus, extracts the
+hostnames, and writes them to this repo's threat-intel watchlist in
+two forms:
 
   lookups/malicious_domains.csv          canonical: bare domain
   lookups/malicious_domains_splunk.csv   "*.domain", for Splunk's wildcard
                                           lookup (see
                                           lookups/transforms.conf.example)
+
+URLhaus requires a free Auth-Key (https://auth.abuse.ch/) for dataset
+downloads. The old unauthenticated endpoint (/downloads/csv_recent/) was
+retired in Oct 2026 and now returns 410 Gone. The key is read from the
+URLHAUS_AUTH_KEY environment variable (a repository secret in GitHub
+Actions; export it in your shell when running locally).
 
 .github/workflows/update-watchlist.yml runs this on a schedule so
 rules/sigma/dns-exfiltration.yml (via build_watchlist_pipeline.py) and
@@ -15,14 +21,15 @@ rules/spl/dns-exfiltration.spl match against a live feed instead of a
 hardcoded domain. Each scheduled run is a commit, so the file's git
 history doubles as a log of what counted as known-bad at any point.
 
-On failure (network error, empty feed) this leaves the existing lookup
-files alone and exits non-zero, so a bad feed pull can't quietly empty
-out the watchlist.
+On failure (missing key, network error, empty feed) this leaves the
+existing lookup files alone and exits non-zero, so a bad feed pull can't
+quietly empty out the watchlist.
 
-Usage: python3 scripts/fetch_threat_intel.py [--limit 500] [--feed-url URL]
+Usage: URLHAUS_AUTH_KEY=... python3 scripts/fetch_threat_intel.py [--limit 500] [--feed-url URL]
 """
 import argparse
 import csv
+import os
 import pathlib
 import sys
 from datetime import datetime, timezone
@@ -30,7 +37,9 @@ from urllib.parse import urlparse
 
 import requests
 
-FEED_URL = "https://urlhaus.abuse.ch/downloads/csv_recent/"
+# The Auth-Key is part of the URL path, so never print this URL or a raw
+# exception that might contain it.
+FEED_URL_TEMPLATE = "https://urlhaus-api.abuse.ch/v2/files/exports/{key}/recent.csv"
 CANONICAL_OUT = pathlib.Path("lookups/malicious_domains.csv")
 SPLUNK_OUT = pathlib.Path("lookups/malicious_domains_splunk.csv")
 FIELDNAMES = ["domain", "first_seen", "source"]
@@ -44,7 +53,7 @@ def fetch_domains(feed_url: str, limit: int) -> list[dict]:
     for line in resp.text.splitlines():
         if not line or line.startswith("#"):
             continue
-        # URLhaus csv_recent columns:
+        # URLhaus recent.csv columns:
         # id,dateadded,url,url_status,last_online,threat,tags,urlhaus_link,reporter
         fields = next(csv.reader([line]))
         if len(fields) < 6:
@@ -82,13 +91,36 @@ def write_csv(rows: list[dict], path: pathlib.Path, wildcard: bool) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--limit", type=int, default=500, help="max unique domains to keep")
-    parser.add_argument("--feed-url", default=FEED_URL)
+    parser.add_argument(
+        "--feed-url",
+        default=None,
+        help="override the feed URL; by default it is built from URLHAUS_AUTH_KEY",
+    )
     args = parser.parse_args()
 
+    feed_url = args.feed_url
+    if not feed_url:
+        key = os.environ.get("URLHAUS_AUTH_KEY", "").strip()
+        if not key:
+            print(
+                "ERROR: URLHAUS_AUTH_KEY is not set (get a free key at "
+                "https://auth.abuse.ch/)",
+                file=sys.stderr,
+            )
+            print("leaving existing lookup files untouched", file=sys.stderr)
+            return 1
+        feed_url = FEED_URL_TEMPLATE.format(key=key)
+
     try:
-        rows = fetch_domains(args.feed_url, args.limit)
+        rows = fetch_domains(feed_url, args.limit)
     except requests.RequestException as e:
-        print(f"ERROR: failed to fetch threat-intel feed: {e}", file=sys.stderr)
+        # Don't print e itself: its message includes the URL, and the URL
+        # includes the Auth-Key.
+        status = getattr(e.response, "status_code", None) or "n/a"
+        print(
+            f"ERROR: failed to fetch threat-intel feed (HTTP {status}, {type(e).__name__})",
+            file=sys.stderr,
+        )
         print("leaving existing lookup files untouched", file=sys.stderr)
         return 1
 

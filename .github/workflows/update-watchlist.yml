@@ -19,6 +19,8 @@ jobs:
       - name: Install dependencies
         run: pip3 install -r requirements.txt
       - name: Pull latest threat-intel feed
+        env:
+          URLHAUS_AUTH_KEY: ${{ secrets.URLHAUS_AUTH_KEY }}
         run: python3 scripts/fetch_threat_intel.py
       - name: Sanity-check the resulting watchlist
         run: python3 scripts/build_watchlist_pipeline.py lookups/malicious_domains.csv
