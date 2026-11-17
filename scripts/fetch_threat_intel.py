@@ -44,6 +44,14 @@ CANONICAL_OUT = pathlib.Path("lookups/malicious_domains.csv")
 SPLUNK_OUT = pathlib.Path("lookups/malicious_domains_splunk.csv")
 FIELDNAMES = ["domain", "first_seen", "source"]
 
+# Legit platforms abused to host payloads: matching on them in DNS is pure
+# noise. Catch these at URL level instead.
+ALLOWLIST = {
+    "github.com", "raw.githubusercontent.com", "objects.githubusercontent.com",
+    "gitlab.com", "bitbucket.org", "drive.google.com", "docs.google.com",
+    "storage.googleapis.com", "dropbox.com", "dl.dropboxusercontent.com",
+    "cdn.discordapp.com", "onedrive.live.com", "1drv.ms", "pastebin.com",
+}
 
 def fetch_domains(feed_url: str, limit: int) -> list[dict]:
     resp = requests.get(feed_url, timeout=30)
@@ -64,6 +72,8 @@ def fetch_domains(feed_url: str, limit: int) -> list[dict]:
             # skip unparseable entries and bare-IP URLs, not DNS-relevant
             continue
         host = host.lower().strip(".")
+        if host in ALLOWLIST or any(host.endswith("." + d) for d in ALLOWLIST):
+            continue
         if host not in seen:
             seen[host] = {
                 "domain": host,
