@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  issues: write
 
 jobs:
   refresh-watchlist:
@@ -31,3 +32,11 @@ jobs:
           git add lookups/malicious_domains.csv lookups/malicious_domains_splunk.csv
           git diff --cached --quiet || git commit -m "chore: refresh threat-intel watchlist [automated]"
           git push
+      - name: Open issue on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create \
+            --title "Watchlist refresh failed (run #${{ github.run_number }})" \
+            --body "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
